@@ -1,0 +1,175 @@
+PARAMETER PFILE TYPE IBIPPARMS-PATH.
+TYPES : BEGIN OF TY,
+        ROW(200) TYPE C,
+        END OF TY.
+DATA : WA TYPE TY,IT TYPE TABLE OF TY.
+TYPES : BEGIN OF TY_XD01,
+        KUNNR TYPE RF02D-KUNNR,
+        KTOKD TYPE RF02D-KTOKD,
+        NAME1 TYPE KNA1-NAME1,
+        SORTL TYPE KNA1-SORTL,
+        STRAS TYPE KNA1-STRAS,
+        ORT01 TYPE KNA1-ORT01,
+        LAND1 TYPE KNA1-LAND1,
+        SPRAS TYPE KNA1-SPRAS,
+        END OF TY_XD01.
+DATA : WA_XD01 TYPE TY_XD01,
+       IT_XD01 TYPE TABLE OF TY_XD01.
+TYPES : BEGIN OF TY_BANK,
+        KUNNR TYPE KNA1-KUNNR,
+        BANKS TYPE KNBK-BANKS,
+        BANKL TYPE KNBK-BANKL,
+        BANKN TYPE KNBK-BANKN,
+        KOINH TYPE KNBK-KOINH,
+        END OF TY_BANK.
+DATA : WA_BANK TYPE TY_BANK,
+       IT_BANK TYPE TABLE OF TY_BANK.
+DATA : WA_BAN TYPE TY_BANK,
+       IT_BAN TYPE TABLE OF TY_BANK.
+DATA : WA_MSG TYPE BDCMSGCOLL,
+       IT_MSG TYPE TABLE OF BDCMSGCOLL.
+TYPES : BEGIN OF TY_FMSG,
+        LNO TYPE SYTABIX,
+        MSG(100) TYPE C,
+        END OF TY_FMSG.
+DATA : WA_FMSG TYPE TY_FMSG,
+       IT_FMSG TYPE TABLE OF TY_FMSG.
+DATA FFILE TYPE STRING.
+DATA:   BDCDATA LIKE BDCDATA    OCCURS 0 WITH HEADER LINE.
+DATA : V1(1) TYPE C,
+       V2(2) TYPE N,
+       V3(15) TYPE C,
+       V4(2) TYPE N,
+       V5(15) TYPE C.
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR PFILE.
+CALL FUNCTION 'F4_FILENAME'
+ IMPORTING
+   FILE_NAME        = PFILE.
+start-of-selection.
+FFILE = PFILE.
+CALL FUNCTION 'GUI_UPLOAD'
+  EXPORTING
+    FILENAME                      = FFILE
+    HAS_FIELD_SEPARATOR           = 'X'
+  TABLES
+    DATA_TAB                      = IT.
+LOOP AT IT INTO WA.
+IF WA-ROW+0(1) = 'C'.
+SPLIT WA-ROW AT ',' INTO V1
+                         WA_XD01-KUNNR
+                         WA_XD01-KTOKD
+                         WA_XD01-NAME1
+                         WA_XD01-SORTL
+                         WA_XD01-STRAS
+                         WA_XD01-ORT01
+                         WA_XD01-LAND1
+                         WA_XD01-SPRAS.
+APPEND WA_XD01 TO IT_XD01.
+CLEAR WA_XD01.
+ELSEIF WA-ROW+0(1) = 'B'.
+SPLIT WA-ROW AT ',' INTO V1
+                         WA_BANK-KUNNR
+                         WA_BANK-BANKS
+                         WA_BANK-BANKL
+                         WA_BANK-BANKN
+                         WA_BANK-KOINH.
+APPEND WA_BANK TO IT_BANK.
+CLEAR WA_BANK.
+ENDIF.
+ENDLOOP.
+LOOP AT IT_XD01 INTO WA_XD01.
+WA_FMSG-LNO = SY-TABIX.
+perform bdc_dynpro      using 'SAPMF02D' '0100'.
+perform bdc_field       using 'BDC_CURSOR'
+                              'RF02D-BUKRS'.
+perform bdc_field       using 'BDC_OKCODE'
+                              '/00'.
+perform bdc_field       using 'RF02D-KUNNR'
+                               WA_XD01-KUNNR.
+perform bdc_field       using 'RF02D-KTOKD'
+                               WA_XD01-KTOKD.
+perform bdc_dynpro      using 'SAPMF02D' '0110'.
+perform bdc_field       using 'BDC_CURSOR'
+                              'KNA1-SPRAS'.
+perform bdc_field       using 'BDC_OKCODE'
+                              '/00'.
+perform bdc_field       using 'KNA1-NAME1'
+                               WA_XD01-NAME1.
+perform bdc_field       using 'KNA1-SORTL'
+                               WA_XD01-SORTL.
+perform bdc_field       using 'KNA1-STRAS'
+                               WA_XD01-STRAS.
+perform bdc_field       using 'KNA1-ORT01'
+                               WA_XD01-ORT01.
+perform bdc_field       using 'KNA1-LAND1'
+                               WA_XD01-LAND1.
+perform bdc_field       using 'KNA1-SPRAS'
+                               WA_XD01-SPRAS.
+perform bdc_dynpro      using 'SAPMF02D' '0120'.
+perform bdc_field       using 'BDC_CURSOR'
+                              'KNA1-LIFNR'.
+perform bdc_field       using 'BDC_OKCODE'
+                              '/00'.
+perform bdc_dynpro      using 'SAPMF02D' '0125'.
+perform bdc_field       using 'BDC_CURSOR'
+                              'KNA1-NIELS'.
+perform bdc_field       using 'BDC_OKCODE'
+                              '/00'.
+perform bdc_dynpro      using 'SAPMF02D' '0130'.
+APPEND LINES OF IT_BANK TO IT_BAN .
+DELETE IT_BAN WHERE KUNNR <> WA_XD01-KUNNR.
+DESCRIBE TABLE IT_BAN LINES V2.
+CONCATENATE 'KNBK-BKONT(' V2 ')' INTO V3.
+perform bdc_field       using 'BDC_CURSOR'
+                               V3.
+perform bdc_field       using 'BDC_OKCODE'
+                              '=UPDA'.
+LOOP AT IT_BANK INTO WA_BANK WHERE KUNNR = WA_XD01-KUNNR.
+V4 = V4 + 1.
+CONCATENATE 'KNBK-BANKS(' V4 ')' INTO V5.
+perform bdc_field       using V5
+                              WA_BANK-BANKS.
+CONCATENATE 'KNBK-BANKL(' V4 ')' INTO V5.
+perform bdc_field       using V5
+                              WA_BANK-BANKL.
+CONCATENATE 'KNBK-BANKN(' V4 ')' INTO V5.
+perform bdc_field       using V5
+                              WA_BANK-BANKN.
+CONCATENATE 'KNBK-KOINH(' V4 ')' INTO V5.
+perform bdc_field       using V5
+                              WA_BANK-KOINH.
+ENDLOOP.
+CALL TRANSACTION 'XD01' USING BDCDATA MODE 'N' MESSAGES INTO IT_MSG.
+IF SY-SUBRC <> 0.
+LOOP AT IT_MSG INTO WA_MSG.
+CALL FUNCTION 'FORMAT_MESSAGE'
+ EXPORTING
+   ID              = WA_MSG-MSGID
+   LANG            = SY-LANGU
+   NO              = WA_MSG-MSGNR
+   V1              = WA_MSG-MSGV1
+   V2              = WA_MSG-MSGV2
+   V3              = WA_MSG-MSGV3
+   V4              = WA_MSG-MSGV4
+ IMPORTING
+   MSG             = WA_FMSG-MSG.
+APPEND WA_FMSG TO IT_FMSG.
+ENDLOOP.
+ENDIF.
+REFRESH : BDCDATA,IT_MSG.
+ENDLOOP.
+
+CL_DEMO_OUTPUT=>DISPLAY( IT_FMSG ).
+FORM BDC_DYNPRO USING PROGRAM DYNPRO.
+  CLEAR BDCDATA.
+  BDCDATA-PROGRAM  = PROGRAM.
+  BDCDATA-DYNPRO   = DYNPRO.
+  BDCDATA-DYNBEGIN = 'X'.
+  APPEND BDCDATA.
+ENDFORM.
+FORM BDC_FIELD USING FNAM FVAL.
+    CLEAR BDCDATA.
+    BDCDATA-FNAM = FNAM.
+    BDCDATA-FVAL = FVAL.
+    APPEND BDCDATA.
+ENDFORM.
